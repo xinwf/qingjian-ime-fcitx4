@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=青简托盘
+Name[en]=Qingjian Tray
+Comment=青简输入法的托盘图标（按当前输入法切换）
+Exec=@TRAY@
+Icon=fcitx-qingjian
+Terminal=false
+NoDisplay=true
+Categories=Settings;
+X-GNOME-Autostart-enabled=true

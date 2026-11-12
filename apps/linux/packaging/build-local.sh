@@ -109,7 +109,19 @@ install -Dm644 "$root/apps/linux/fcitx4/data/addon/fcitx-qingjian.conf" \
 install -Dm644 "$root/assets/icon/fcitx4.png" "$fcitx/usr/share/fcitx/imicon/qingjian.png"
 install -Dm644 "$root/assets/icon/fcitx4.png" \
   "$fcitx/usr/share/icons/hicolor/48x48/apps/fcitx-qingjian.png"
+# 青简的 Fcitx4 皮肤：classic-ui 从 /usr/share/fcitx/skin/<id>/ 读 fcitx_skin.conf，
+# 托盘「皮肤」菜单里按目录名可切换（简白/深黑/青简绿/青简橙/青简蓝）
+for skin in "$root"/apps/linux/fcitx4/skin/qingjian*/; do
+  name=$(basename "$skin")
+  mkdir -p "$fcitx/usr/share/fcitx/skin/$name"
+  cp -a "$skin/." "$fcitx/usr/share/fcitx/skin/$name/"
+done
 install -Dm644 "$root/LICENSE" "$fcitx/usr/share/doc/qingjian-fcitx4/copyright"
+# 托盘守护进程由桌面会话的 autostart 拉起；Exec 换到系统绝对路径
+install -Dm755 "$root/apps/linux/fcitx4/tray/qingjian_tray.py" "$fcitx/usr/bin/qingjian-tray"
+mkdir -p "$fcitx/etc/xdg/autostart"
+sed 's|@TRAY@|/usr/bin/qingjian-tray|' "$root/apps/linux/fcitx4/tray/qingjian-tray.desktop.in" \
+  > "$fcitx/etc/xdg/autostart/qingjian-tray.desktop"
 strip --strip-unneeded "$core/usr/bin/qingjian-linux-server" "$core/usr/bin/qingjian-linux-ibus" \
   "$core/usr/bin/qingjian-settings" "$fcitx/usr/lib/$multiarch/fcitx/fcitx-qingjian.so"
 
@@ -210,9 +222,18 @@ chmod 755 "$core/DEBIAN/postinst" "$core/DEBIAN/prerm"
 
 normalize "$fcitx"
 control "$fcitx" qingjian-fcitx4 \
-  "qingjian (= $deb_version), fcitx, $(shlibs "$fcitx/usr/lib/$multiarch/fcitx/fcitx-qingjian.so")" '' \
-  '青简输入法的 Fcitx4 插件' \
-  ' 让 Fcitx4 能用青简；引擎在 qingjian 包里。装完重启 Fcitx4（fcitx -r），在配置工具里添加「青简」。'
+  "qingjian (= $deb_version), fcitx, python3, python3-gi, python3-dbus, gir1.2-appindicator3-0.1, $(shlibs "$fcitx/usr/lib/$multiarch/fcitx/fcitx-qingjian.so")" '' \
+  '青简输入法的 Fcitx4 插件、托盘与皮肤' \
+  ' 让 Fcitx4 能用青简；引擎在 qingjian 包里。装完重启 Fcitx4（fcitx -r），在配置工具里添加「青简」。
+ 托盘由 qingjian-tray 提供，在用户会话执行一次 qingjian-tray --setup 禁用 Fcitx4/搜狗自带的托盘模块。
+ 另带两套 classic-ui 皮肤（青简绿 / 青简绿·深色），在托盘「皮肤」菜单或 Fcitx 配置 → 外观里选。'
+cat > "$fcitx/DEBIAN/postinst" <<'SCRIPT'
+#!/bin/sh
+if [ "$1" = configure ]; then
+  echo '青简托盘：请在用户会话执行 qingjian-tray --setup（禁用冲突托盘模块并重启 Fcitx4）' >&2
+fi
+SCRIPT
+chmod 755 "$fcitx/DEBIAN/postinst"
 
 mkdir -p "$out"
 rm -f "$out"/qingjian_*.deb "$out"/qingjian-fcitx4_*.deb

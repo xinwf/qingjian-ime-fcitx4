@@ -48,7 +48,13 @@ sudo apt install ./target/linux-pkg/out/qingjian_*.deb \
 "Cannot access user instance remotely"，服务起不来；本机版先以 `runuser` 直连该用户的
 `DBUS_SESSION_BUS_ADDRESS` 做 daemon-reload / restart（prerm 同理 stop），`-M` 留作兜底。
 `qingjian-fcitx4` 装 Fcitx4 插件到 `/usr/lib/<多架构>/fcitx/`，addon 描述用裸库名
-`Library=fcitx-qingjian.so`，另有 `imicon` 与 48x48 托盘图标。依赖由 `dpkg-shlibdeps` 从二进制推，
+`Library=fcitx-qingjian.so`，另有 `imicon` 与 48x48 托盘图标；还装 `/usr/bin/qingjian-tray` 与
+`/etc/xdg/autostart/qingjian-tray.desktop`，`Depends` 带 `python3-gi` / `python3-dbus` /
+`gir1.2-appindicator3-0.1`。五套 classic-ui 皮肤（简白、深黑、青简绿、青简橙、青简蓝）装到
+`/usr/share/fcitx/skin/qingjian*/`，托盘「皮肤」菜单或 Fcitx 配置 → 外观里可选，生成方式见
+[linux-fcitx4.md](linux-fcitx4.md) 的「皮肤」。装完在用户会话执行一次 `qingjian-tray --setup`，
+禁用 Fcitx4 与搜狗的托盘模块并重启 Fcitx4，托盘改由青简接管（`qingjian-tray --undo-setup` 恢复），
+原因见 [linux-fcitx4.md](linux-fcitx4.md) 的「托盘图标」。依赖由 `dpkg-shlibdeps` 从二进制推，
 本机编译出来的 Server 会链到本机的 libssl，所以这个包只保证在编它的这台机器（及同代系统）上装得上，
 不是通用发行包。装完 `fcitx -r`，`fcitx-remote -m qingjian` 应返回 `fcitx-qingjian`；
 `ldd` 插件库不该有 `not found`。Fcitx4 的工程记录见 [linux-fcitx4.md](linux-fcitx4.md)。

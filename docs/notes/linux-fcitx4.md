@@ -24,6 +24,46 @@ Ubuntu 22.04 使用 `fcitx-libs-dev`（Fcitx4 4.2.9.8）、`nlohmann-json3-dev`�
 - Chrome 等没有 `CAPACITY_SURROUNDING_TEXT` 的 X11 应用改读 PRIMARY；XRes 只接受与当前焦点窗口同属一个 X11 客户端的选区，等待最多 100 ms，UTF-8 格式和长度不合规时拒绝。提交前会重新读取并比对选中文字，应用能提供光标位置时还会比对位置。
 - `OnClose(CET_LostFocus)` 表示框架已处理客户端预编辑；插件把这个事实告诉 Server，防止重复上屏。
 
+## 皮肤
+
+Fcitx4 的候选窗由 classic-ui 绘制，皮肤从 `/usr/share/fcitx/skin/<id>/fcitx_skin.conf` 读。
+青简自己的 `theme.json` 是 Rust 渲染器的格式，进不了这个框架，但配色、字号、边距能映射过去：
+`apps/linux/fcitx4/skin/generate.py` 生成五套皮肤，`qingjian-fcitx4` 把它们装到
+`/usr/share/fcitx/skin/`：
+
+| 目录 | 显示名 | 底色 |
+| --- | --- | --- |
+| `qingjian-light` | 简白 | 白底黑字，与青简渲染器的浅色一致 |
+| `qingjian-dark` | 深黑 | 黑底白字，与青简渲染器的深色一致 |
+| `qingjian` | 青简绿 | 原主题 `accent #94be52` 铺成淡绿底、深绿字 |
+| `qingjian-orange` | 青简橙 | 暖橙底、深棕字 |
+| `qingjian-blue` | 青简蓝 | 晴蓝底、深蓝字 |
+
+切换走托盘「皮肤」菜单（写 `SkinType` 后 `ReloadConfig`），也可以直接改
+`~/.config/fcitx/conf/fcitx-classic-ui.config` 的 `SkinType=qingjian`。改了颜色或尺寸后重跑
+`python3 apps/linux/fcitx4/skin/generate.py` 再打包。
+
+能映射的是字体、字号、各类候选字的颜色、输入窗/状态栏/菜单的圆角背景与边距、翻页箭头和托盘图标；
+映射不了的是青简渲染器里的逐候选布局、内联注记排版、阴影/模糊、动效和主题装饰图形——classic-ui
+只有一张背景图加一组文字颜色，候选按框架固定布局排。
+
+## 托盘图标
+
+Fcitx4 自带的 `fcitx-notificationitem` 在输入法未激活（英文模式）时显示的是启用列表第一个输入法的图标；装了搜狗拼音后，搜狗的 `fcitx-sogoupinyinhdm` / `hxm` 还会 hook `com.canonical.dbusmenu`，把右键菜单换成搜狗的，`Event` 被截走，菜单里的「切换皮肤 / 切换输入法」没反应，「属性设置」落到 `sogoupinyin-configtool`。
+
+`apps/linux/fcitx4/tray/qingjian_tray.py` 是独立的 Python 托盘守护进程（装成 `qingjian-tray`），不复用 Fcitx4 的托盘模块：
+
+- 图标按 `~/.config/fcitx/profile` 的 `IMName` 选，不受激活状态影响；青简 `fcitx-qingjian`、搜狗 `fcitx-sogoupinyin`、知意 `fcitx`，其他输入法回退 `input-keyboard`。
+- 菜单：`青简设置`（启动 `/usr/bin/qingjian-settings`）、`输入法`（D-Bus `SetCurrentIM` + `ActivateIM`）、`中 / 英切换`（`ToggleIM`）、`皮肤`（写 `fcitx-classic-ui.config` 的 `SkinType` 后 `ReloadConfig`；列出 default / dark / classic 与随包的简白、深黑、青简绿、青简橙、青简蓝）、`重新启动 Fcitx4`、`退出托盘`。
+- 用 `python3-gi` + `gir1.2-appindicator3-0.1`；`python3-dbus` 用来走 Fcitx4 的 D-Bus 接口，没有时回退 `fcitx-remote` 命令。
+- 锁屏时 GNOME 会撤掉 `org.kde.StatusNotifierWatcher`，脚本监听它重新出现并重设 `Status`，解锁后自动注册。
+
+`qingjian-tray --setup` 在 `~/.config/fcitx/addon/` 写 `fcitx-notificationitem`、`fcitx-sogoupinyinhdm`、`fcitx-sogoupinyinhxm` 三个 `Enabled=False` 覆盖并重启 Fcitx4；`--undo-setup` 删除它们并重启，恢复 Fcitx4 自带托盘。deb 装 `/usr/bin/qingjian-tray` 与 `/etc/xdg/autostart/qingjian-tray.desktop`，装完在用户会话执行一次 `--setup`。
+
+本机 Ubuntu 20.04.6 / Fcitx4 4.2.9.7 上验过：SNI 导出 `Id=qingjian-tray`、`IconName=fcitx-qingjian`；点菜单「知意」/「青简」时 `IMName` 与图标跟着变（`fcitx` ↔ `fcitx-qingjian`）；点「dark」写入 `SkinType=dark` 并重载。本机上 `fcitx-remote -s sogoupinyin` 也切不过去，菜单点「搜狗拼音」无效是搜狗输入法自己的状态，与托盘无关。`SkinType=qingjian` / `qingjian-dark` 也验过：候选窗分别是白底与 `#1e1e1e` 圆角卡片，首候选橙色、序号灰色，`ni'hao` 的候选列表正常显示。
+
+换一个窗口输入法就被重置成列表里别的输入法时，改 Fcitx4 的全局配置 `~/.config/fcitx/config`：`[Program] ShareStateAmongWindow=All`（缺省 `No` 表示每个窗口独立，新窗口回到 `IMName` / 启用列表的第一个）。这是 Fcitx4 自己按窗口管理输入状态的行为，与托盘插件无关；`All` 让所有窗口共享当前输入法。
+
 ## 本机验证
 
 Ubuntu 22.04、Fcitx4 4.2.9.8、GTK3：在隔离的 Xvfb 和私有 D-Bus 会话中加载插件，`fcitx-remote -m qingjian` 返回 `fcitx-qingjian`；GTK3 文本框切换到青简，输入 `nihao`、空格，得到「你好」。同一文本框设为密码模式时输入原样上屏为 `nihao `。真实桌面上的 Chrome 输入框选中「你好」后按 `Ctrl + Super + T`，出现「翻译中…」，译文返回后按 Enter 成功替换选区。Qt5 等其他应用尚未验证。
