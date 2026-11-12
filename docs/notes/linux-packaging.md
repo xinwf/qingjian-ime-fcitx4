@@ -22,6 +22,43 @@ QINGJIAN_SAMPLE=1 apps/linux/packaging/build.sh   # 没有产品数据时只带�
 | fcitx5 插件（rpm） | Fedora 42 容器 | 同上 |
 | 随包资源 | 本机，`files.py resources` | 与 `install.sh` 同一套产品数据校验（`tools/release/dicts.lock` / `models.lock`）与布局 |
 
+### 本机原生打 deb（老发行版 / Fcitx4）
+
+容器包要求 glibc ≥ 2.34，Ubuntu 20.04（glibc 2.31）装不上；Fcitx4 插件也从来没进过容器包。
+`apps/linux/packaging/build-local.sh` 不用 Docker，只在本机 Debian/Ubuntu 上编、只出 deb：
+
+```bash
+tools/release/data-fetch.sh                       # 产品数据；没有就设 QINGJIAN_SAMPLE=1
+apps/linux/packaging/build-local.sh
+sudo apt install ./target/linux-pkg/out/qingjian_*.deb \
+  ./target/linux-pkg/out/qingjian-fcitx4_*.deb
+```
+
+前置 Rust（按 `rust-toolchain.toml`）、cmake、g++、pkg-config、dpkg-dev、python3、
+`fcitx-libs-dev libx11-dev libxres-dev nlohmann-json3-dev libssl-dev`。本机默认 g++ 编不动插件时
+（老发行版上 C++20 支持不全）脚本会用 `g++-10` 重试。版本号沿用 `build.sh` 的算法，产物同样在
+`target/linux-pkg/out/`，别和容器打出的 `qingjian-fcitx5` 混用。
+
+`qingjian` 装的内容与容器包一样（Server、IBus 前端、词库、systemd 用户服务、图标），另外本机版多装
+`qingjian-settings` 与「青简设置」桌面项：容器包目前不带设置程序，Fcitx4 插件本身也没有内嵌设置面板，
+搜狗等输入法在托盘菜单里挂的是它们自己的设置，不随当前输入法切换。桌面项把 `Exec` 指到
+`/usr/bin/qingjian-settings`，从应用菜单打开就能改 `~/.config/qingjian/config.toml`（保存后热加载）。
+`postinst` / `prerm` 沿用 `deb/assemble.sh` 的逻辑，`Recommends` 换成 `ibus | qingjian-fcitx4`。
+老 systemd（Ubuntu 20.04 的 245）上 root 用 `systemctl --user -M 用户@` 会报
+"Cannot access user instance remotely"，服务起不来；本机版先以 `runuser` 直连该用户的
+`DBUS_SESSION_BUS_ADDRESS` 做 daemon-reload / restart（prerm 同理 stop），`-M` 留作兜底。
+`qingjian-fcitx4` 装 Fcitx4 插件到 `/usr/lib/<多架构>/fcitx/`，addon 描述用裸库名
+`Library=fcitx-qingjian.so`，另有 `imicon` 与 48x48 托盘图标。依赖由 `dpkg-shlibdeps` 从二进制推，
+本机编译出来的 Server 会链到本机的 libssl，所以这个包只保证在编它的这台机器（及同代系统）上装得上，
+不是通用发行包。装完 `fcitx -r`，`fcitx-remote -m qingjian` 应返回 `fcitx-qingjian`；
+`ldd` 插件库不该有 `not found`。Fcitx4 的工程记录见 [linux-fcitx4.md](linux-fcitx4.md)。
+
+2026-11-12 在 Ubuntu 20.04.6（glibc 2.31、Fcitx4 4.2.9.7）本机实测：两个包装上无依赖错误，
+`postinst` 把已登录用户的 Server 起到 active，`--check nihao` 出「你好」，
+`fcitx-remote -m qingjian` 返回 `fcitx-qingjian`，GTK3 输入框里 `nihao` + 空格上屏「你好」。
+编译时没动系统包：`fcitx-libs-dev` / `libxres-dev` 用 `apt download` 解到用户目录、
+把改写过 prefix 与 libdir 的 `.pc` 放进 `PKG_CONFIG_PATH` 给 CMake 用。
+
 ## 两种包各装了什么
 
 deb 与 rpm 都拆成两个包：

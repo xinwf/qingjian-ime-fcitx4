@@ -8,6 +8,8 @@ X11 选区备用读取还需要 `libx11-dev` 和 `libxres-dev`。
 
 Ubuntu 22.04 使用 `fcitx-libs-dev`（Fcitx4 4.2.9.8）、`nlohmann-json3-dev`、OpenSSL 开发包及 Rust 1.96；无需 Fcitx5 或 Qt6。`apps/linux/scripts/install.sh --fcitx4` 编译 Server 和插件，装到用户目录。插件库放在 `<prefix>/lib/fcitx/`，配置放在 `$XDG_CONFIG_HOME/fcitx/addon/`，配置中使用插件绝对路径。输入法图标同时放在 `$XDG_CONFIG_HOME/fcitx/imicon/qingjian.png` 和 `$XDG_DATA_HOME/icons/hicolor/48x48/apps/fcitx-qingjian.png`，分别供经典面板和托盘组件查找；只安装 `qingjian.png` 应用图标时，托盘组件会回退到 Fcitx 图标。默认 Fcitx5 安装流程不变；卸载继续按安装清单清理。
 
+系统级安装走本机原生 deb：`apps/linux/packaging/build-local.sh` 在 glibc 低于容器包要求的老发行版（如 Ubuntu 20.04）上编出 `qingjian_*.deb` 与 `qingjian-fcitx4_*.deb`，用 `sudo apt install ./target/linux-pkg/out/qingjian_*.deb ./target/linux-pkg/out/qingjian-fcitx4_*.deb` 装上，见 [linux-packaging.md](linux-packaging.md)。deb 把插件放 `/usr/lib/<多架构>/fcitx/`、addon 描述放 `/usr/share/fcitx/addon/`，此时 `Library=fcitx-qingjian.so` 用裸库名（用户级安装才改成绝对路径）；装完 `fcitx -r`，`fcitx-remote -m qingjian` 应返回 `fcitx-qingjian`。设置程序是 `/usr/bin/qingjian-settings`（应用菜单「青简设置」），改的是 `~/.config/qingjian/config.toml`，保存后热加载；Fcitx4 插件自身没有内嵌设置面板，托盘里的「设置」是框架或搜狗的，不随当前输入法切换。
+
 `python3 apps/linux/scripts/files.py` 的哈希读取按块处理，兼容 Ubuntu 22.04 自带的 Python 3.10。安装后需在 Fcitx4 配置中启用「青简」，并手动启动 Server。
 
 ## 框架差异
@@ -25,3 +27,5 @@ Ubuntu 22.04 使用 `fcitx-libs-dev`（Fcitx4 4.2.9.8）、`nlohmann-json3-dev`�
 ## 本机验证
 
 Ubuntu 22.04、Fcitx4 4.2.9.8、GTK3：在隔离的 Xvfb 和私有 D-Bus 会话中加载插件，`fcitx-remote -m qingjian` 返回 `fcitx-qingjian`；GTK3 文本框切换到青简，输入 `nihao`、空格，得到「你好」。同一文本框设为密码模式时输入原样上屏为 `nihao `。真实桌面上的 Chrome 输入框选中「你好」后按 `Ctrl + Super + T`，出现「翻译中…」，译文返回后按 Enter 成功替换选区。Qt5 等其他应用尚未验证。
+
+系统级 deb 也在 Ubuntu 20.04.6 / Fcitx4 4.2.9.7 上验过：`fcitx -r` 后 `fcitx-remote -m qingjian` 返回 `fcitx-qingjian`，Server 由 `postinst` 自动起到 active，插件 `ldd` 无 `not found`，GTK3 输入框里 `nihao` + 空格上屏「你好」。
